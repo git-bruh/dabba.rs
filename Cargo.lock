@@ -51,6 +51,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dabba"
+version = "0.1.0"
+dependencies = [
+ "nix",
+ "serde",
+ "ureq",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,15 +172,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "rustainer"
-version = "0.1.0"
-dependencies = [
- "nix",
- "serde",
- "ureq",
 ]
 
 [[package]]
