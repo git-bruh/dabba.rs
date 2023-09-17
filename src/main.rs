@@ -15,6 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ready_pipe = util::pipe_ownedfd()?;
 
     let cb = Box::new(|| {
+        die_with_parent().expect("prctl failed!");
+
         let mut ready = [0];
         nix::unistd::read(ready_pipe.0.as_raw_fd(), &mut ready).expect("failed to read()");
 

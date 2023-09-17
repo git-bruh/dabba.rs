@@ -11,6 +11,12 @@ pub fn no_new_privs() -> nix::Result<()> {
     nix::sys::prctl::set_no_new_privs()
 }
 
+/// Ensure that the child process is killed with SIGKILL when the parent
+/// container process exits
+pub fn die_with_parent() -> nix::Result<()> {
+    nix::sys::prctl::set_pdeathsig(Signal::SIGKILL)
+}
+
 /// Pretent to be root inside the container by creating the appropriate
 /// UID and GID mappings
 pub fn root() -> Result<(), std::io::Error> {
