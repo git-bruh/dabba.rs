@@ -1,7 +1,5 @@
-use dabba::{
-    clone_unshare, close_fds, mounts, new_session, no_new_privs, pipe_ownedfd, root,
-    wait_for_completion, SlirpHelper,
-};
+use dabba::{container::*, log::Logger, slirp::SlirpHelper, util};
+use log::LevelFilter;
 use std::os::fd::AsRawFd;
 use std::process::Command;
 
@@ -9,10 +7,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO
     //   - Hostname
 
-    println!("prctl(PR_SET_NO_NEW_PRIVS)");
+    Logger::register(LevelFilter::Trace)?;
+
+    log::info!("prctl(PR_SET_NO_NEW_PRIVS)");
     no_new_privs()?;
 
-    let ready_pipe = pipe_ownedfd()?;
+    let ready_pipe = util::pipe_ownedfd()?;
 
     let cb = Box::new(|| {
         let mut ready = [0];
@@ -20,28 +20,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match ready[0] {
             0 => {
-                eprintln!("Main process failed to initialize, exiting!");
+                log::warn!("Main process failed to initialize, exiting!");
                 return 1;
             }
             1 => {
-                println!("Main process successfully initialized!");
+                log::info!("Main process successfully initialized!");
             }
             _ => {
-                eprintln!("Got invalid status '{}'!", ready[0]);
+                log::warn!("Got invalid status '{}'!", ready[0]);
                 return 1;
             }
         }
 
-        println!("Closing all non-essential FDs");
+        log::info!("Closing all non-essential FDs");
         close_fds();
 
-        println!("Setting up UID and GID mappings");
+        log::info!("Setting up UID and GID mappings");
         root().unwrap();
 
-        println!("Performing the mounting dance");
+        log::info!("Performing the mounting dance");
         mounts(std::env::args().nth(1).expect("no root").as_str()).unwrap();
 
-        println!("Setting up new session");
+        log::info!("Setting up new session");
         new_session().expect("failed to setup session");
 
         Command::new("sh").status().unwrap();
@@ -49,14 +49,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0
     });
 
-    println!("Setting up namespace");
+    log::info!("Setting up namespace");
 
     let pid = clone_unshare(cb)?;
 
     match SlirpHelper::spawn(pid) {
         Ok(mut slirp) => {
             if let Err(e) = slirp.wait_until_ready() {
-                eprintln!("Failed to wait for slirp: {e}");
+                log::warn!("Failed to wait for slirp: {e}");
                 nix::unistd::write(ready_pipe.1.as_raw_fd(), &[0])?;
             } else {
                 nix::unistd::write(ready_pipe.1.as_raw_fd(), &[1])?;
@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             slirp.notify_exit_and_wait()?;
         }
         Err(err) => {
-            eprintln!("Failed to spawn slirp: {err}");
+            log::warn!("Failed to spawn slirp: {err}");
             nix::unistd::write(ready_pipe.1.as_raw_fd(), &[0])?;
         }
     }

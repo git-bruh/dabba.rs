@@ -9,3 +9,4 @@ edition = "2021"
 nix = { version = "0.27.1", features = ["sched", "user", "mount", "fs", "process", "poll"] }
 serde = "1.0.188"
 ureq = "2.7.1"
+log = { version = "0.4", features = ["std"] }
