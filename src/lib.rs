@@ -1,8 +1,114 @@
 use nix::mount::{MntFlags, MsFlags};
+use nix::poll::{PollFd, PollFlags};
 use nix::sched::CloneFlags;
 use nix::sys::signal::Signal;
+use nix::unistd::Pid;
 use std::fs::File;
 use std::io::Write;
+use std::os::fd::OwnedFd;
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::process::{Child, Command};
+
+/// Wrap nix::unistd::pipe to reutrn OwnedFd's rather than
+/// RawFd's as RawFd doesn't clean itself up on being dropped
+pub fn pipe_ownedfd() -> nix::Result<(OwnedFd, OwnedFd)> {
+    let (p1, p2) = nix::unistd::pipe()?;
+    unsafe { Ok((OwnedFd::from_raw_fd(p1), OwnedFd::from_raw_fd(p2))) }
+}
+
+/// Helper for spawning slirp4netns and performing IPC with pipes
+pub struct SlirpHelper {
+    /// Pipe for waiting for slirp4netns readiness
+    ready_pipe: (OwnedFd, OwnedFd),
+    /// Pipe to notify slirp4netns to exit
+    exit_pipe: (OwnedFd, OwnedFd),
+    /// The child process handle
+    slirp: Child,
+}
+
+impl SlirpHelper {
+    /// Get the relevant namespace paths from /proc
+    fn get_ns_paths(sandbox_pid: Pid) -> (String, String) {
+        let proc_ns = format!("/proc/{sandbox_pid}/ns");
+
+        (format!("{proc_ns}/user"), format!("{proc_ns}/net"))
+    }
+
+    /// Spawn a slirp4netns instance for the given `sandbox_pid`, but doesn't
+    /// implicitly wait for readiness, must call `wait_until_ready`
+    pub fn spawn(sandbox_pid: Pid) -> Result<Self, std::io::Error> {
+        let ready_pipe = pipe_ownedfd()?;
+        let exit_pipe = pipe_ownedfd()?;
+
+        let (userns_path, netns_path) = Self::get_ns_paths(sandbox_pid);
+
+        let slirp = Command::new("slirp4netns")
+            .args([
+                "--configure",
+                "--exit-fd",
+                exit_pipe.0.as_raw_fd().to_string().as_str(),
+                "--ready-fd",
+                ready_pipe.1.as_raw_fd().to_string().as_str(),
+                "--userns-path",
+                userns_path.as_str(),
+                "--netns-type=path",
+                netns_path.as_str(),
+                "tap0",
+            ])
+            .spawn()?;
+
+        Ok(Self {
+            ready_pipe,
+            exit_pipe,
+            slirp,
+        })
+    }
+
+    /// Wait for activity on the notification FD to ensure that `slirp4netns`
+    /// has initialized
+    pub fn wait_until_ready(&self) -> Result<(), std::io::Error> {
+        const TIMEOUT: i32 = 1000;
+
+        let read_fd = &self.ready_pipe.0;
+
+        let mut pollfd = [PollFd::new(read_fd, PollFlags::POLLIN)];
+        nix::poll::poll(&mut pollfd, TIMEOUT)?;
+
+        if (pollfd[0].revents().expect("failed to get revents!") & PollFlags::POLLIN)
+            != PollFlags::POLLIN
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Did not receive POLLIN event after {TIMEOUT}ms"),
+            ));
+        }
+
+        let mut notification_buf = [0];
+        nix::unistd::read(read_fd.as_raw_fd(), &mut notification_buf)?;
+
+        if notification_buf[0] != b'1' {
+            eprintln!("Expected '1', got '{}'", notification_buf[0]);
+        }
+
+        Ok(())
+    }
+
+    /// Write to the exit pipe, notifying `slirp4netns` to exit
+    fn notify_exit(&self) -> Result<(), std::io::Error> {
+        let write_fd = &self.exit_pipe.1;
+        nix::unistd::write(write_fd.as_raw_fd(), &[b'1'])?;
+
+        Ok(())
+    }
+
+    /// Notify `slirp4netns` to exit and wait for the process to end
+    pub fn notify_exit_and_wait(&mut self) -> Result<(), std::io::Error> {
+        self.notify_exit()?;
+        self.slirp.wait()?;
+
+        Ok(())
+    }
+}
 
 /// Prevent ourselves from gaining any further privileges, say
 /// through executing setuid programs like `sudo` or `doas`
@@ -127,6 +233,18 @@ pub fn mounts(container_src: &str) -> nix::Result<()> {
 }
 
 /// Create a new "session",
-pub fn new_session() -> nix::Result<nix::unistd::Pid> {
+pub fn new_session() -> nix::Result<Pid> {
     nix::unistd::setsid()
+}
+
+/// Close all FDs apart from stdin, stdout and stderr
+pub fn close_fds() {
+    // Close all FDs until failure
+    for fd in 3.. {
+        if nix::unistd::close(fd).is_err() {
+            return;
+        }
+
+        eprintln!("Closed FD '{fd}'")
+    }
 }
