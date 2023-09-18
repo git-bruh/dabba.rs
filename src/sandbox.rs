@@ -1,13 +1,19 @@
-use crate::{mount_helper, mount_helper::MountType, util};
+use crate::{
+    idmap_helper,
+    ipc::{ChildEvent, Ipc, ParentEvent},
+    mount_helper,
+    mount_helper::MountType,
+    slirp::SlirpHelper,
+    util,
+};
 use nix::sched::{CloneCb, CloneFlags};
-use nix::sys::eventfd::EfdFlags;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
-use std::os::fd::AsRawFd;
 use std::path::Path;
 
 pub struct Sandbox {
     pub pid: Pid,
+    slirp: SlirpHelper,
 }
 
 impl Sandbox {
@@ -60,7 +66,7 @@ impl Sandbox {
         nix::unistd::setsid()
     }
 
-    fn setup(root: &Path) -> Result<(), std::io::Error> {
+    fn setup_child_inner(root: &Path) -> Result<(), std::io::Error> {
         log::info!("Spawned sandbox!");
 
         log::info!("Ensuring that child dies with parent");
@@ -78,6 +84,41 @@ impl Sandbox {
         Ok(())
     }
 
+    fn setup_child(ipc: &Ipc, root: &Path) -> isize {
+        match ipc.recv_in_child().expect("failed to recv from parent!") {
+            ParentEvent::SlirpFailure => {
+                log::warn!("Parent reported failure in slirp setup, exiting");
+                return 1;
+            }
+            ParentEvent::UidGidMapFailure => {
+                log::warn!("Parent reported failed mappings, exiting");
+                return 1;
+            }
+            ParentEvent::InitSuccess => {
+                log::info!("Received success event from parent, continuing setup")
+            }
+        }
+
+        if let Err(err) = Self::setup_child_inner(root) {
+            log::error!("Failed to setup sandbox: {err}");
+
+            ipc.send_from_child(ChildEvent::InitFailed)
+                .expect("failed to send from child!");
+
+            return 1;
+        }
+
+        ipc.send_from_child(ChildEvent::InitSuccess)
+            .expect("failed to send from child!");
+
+        // TODO confirm if this can lead to a (harmless) double-close of the
+        // IPC pipes in the sandbox process
+        log::info!("Closing FDs");
+        util::close_fds().expect("shouldn't fail to open /proc/self/fd");
+
+        0
+    }
+
     /// Set up the namespace
     /// Just use clone() rather than fork() + unshare()
     /// as propagation of PID namespaces requires another fork()
@@ -91,27 +132,18 @@ impl Sandbox {
         // TODO heap allocate this
         static mut STACK: [u8; 1024 * 1024] = [0_u8; 1024 * 1024];
 
-        // XXX maybe swap this for something a bit rusty
-        let efd = nix::sys::eventfd::eventfd(0, EfdFlags::empty())?;
+        let ipc = Ipc::new()?;
 
         log::info!("Spawning sandbox!");
 
         let pid = unsafe {
             nix::sched::clone(
                 Box::new(|| {
-                    if let Err(err) = Self::setup(root) {
-                        log::error!("Failed to setup sandbox: {err}");
+                    let status = Self::setup_child(&ipc, root);
 
-                        nix::unistd::write(efd.as_raw_fd(), &1_u64.to_ne_bytes())
-                            .expect("failed to write!");
-                        return 1;
+                    if status != 0 {
+                        return status;
                     }
-
-                    nix::unistd::write(efd.as_raw_fd(), &2_u64.to_ne_bytes())
-                        .expect("failed to write!");
-
-                    log::info!("Closing FDs");
-                    util::close_fds().expect("shouldn't fail to open /proc/self/fd");
 
                     user_cb()
                 }),
@@ -129,30 +161,48 @@ impl Sandbox {
 
         log::info!("Launched sandbox with pid {pid}");
 
-        let mut ev64 = [0_u8; 8];
-        nix::unistd::read(efd.as_raw_fd(), &mut ev64).expect("failed to read!");
+        if let Err(err) = idmap_helper::setup_maps(pid) {
+            log::warn!("Failed to setup UID GID mappings: {err}");
+            ipc.send_from_parent(ParentEvent::UidGidMapFailure)
+                .expect("failed to send from parent!");
 
-        match u64::from_ne_bytes(ev64) {
-            1 => {
-                log::error!("Failed to setup sandbox, cleaning up child process");
-                nix::sys::wait::waitpid(pid, None)?;
+            nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
+            return Err(err);
+        }
 
+        let slirp = match SlirpHelper::spawn(pid) {
+            Ok(slirp) => slirp,
+            Err(err) => {
+                log::warn!("Failed to setup Slirp: {err}");
+                ipc.send_from_parent(ParentEvent::SlirpFailure)
+                    .expect("failed to send from parent!");
+
+                nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
+                return Err(err);
+            }
+        };
+
+        ipc.send_from_parent(ParentEvent::InitSuccess)
+            .expect("failed to send from parent!");
+
+        match ipc.recv_in_parent().expect("failed to recv in parent!") {
+            ChildEvent::InitFailed => {
+                log::warn!("Child notified failure in parent");
                 Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    "sandbox setup failed",
+                    "child init failed",
                 ))
             }
-            2 => {
-                log::info!("Successfully initialized sandbox and entered user_cb()");
-                Ok(Self { pid })
-            }
-            _ => {
-                panic!("Got invalid u64 value from container!")
-            }
+            ChildEvent::InitSuccess => Ok(Self { pid, slirp }),
         }
     }
 
-    pub fn wait(&self) -> nix::Result<nix::sys::wait::WaitStatus> {
-        nix::sys::wait::waitpid(self.pid, None)
+    pub fn wait(&mut self) -> Result<(), std::io::Error> {
+        let status = nix::sys::wait::waitpid(self.pid, None)?;
+        log::info!("Sandbox exited with status {status:?}");
+
+        self.slirp.notify_exit_and_wait()?;
+
+        Ok(())
     }
 }

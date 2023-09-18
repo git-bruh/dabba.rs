@@ -1,4 +1,4 @@
-use dabba::{idmap_helper, log::Logger, sandbox::Sandbox, slirp::SlirpHelper};
+use dabba::{log::Logger, sandbox::Sandbox};
 use log::LevelFilter;
 use std::path::Path;
 use std::process::Command;
@@ -12,17 +12,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0_isize
     };
 
-    let sandbox = Sandbox::spawn(
+    let mut sandbox = Sandbox::spawn(
         Path::new(std::env::args().nth(1).expect("no root passed!").as_str()),
         Box::new(cb),
     )?;
 
-    idmap_helper::setup_maps(sandbox.pid)?;
-
-    let mut slirp = SlirpHelper::spawn(sandbox.pid)?;
-
     sandbox.wait()?;
-    slirp.notify_exit_and_wait()?;
 
     Ok(())
 }
