@@ -24,10 +24,18 @@ WIP, will be added after project is fully usable:
 cargo run -- <path_to_sandboxed_dir>
 ```
 
-Example:
+Example (extracts the rootfs from an OCI image pulled via Docker, Rust logic is WIP):
 
 ```sh
-testuser@shed dabba.rs $ cargo run                                                                              git@main
+$ mkdir root
+$ docker save alpine:latest > alpine.tar
+$ tar xf alpine.tar
+$ mkdir extracted; cd extracted
+$ tar xf ../*/layer.tar
+```
+
+```sh
+testuser@shed dabba.rs $ cargo run -- root/extracted
     Finished dev [unoptimized + debuginfo] target(s) in 0.02s
      Running `target/debug/dabba`
 [PID 1648] INFO:dabba::sandbox -- Spawning sandbox!
