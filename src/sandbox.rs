@@ -180,10 +180,8 @@ impl Sandbox {
             }
         }
     }
-}
 
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        nix::sys::wait::waitpid(self.pid, None).expect("failed to wait!");
+    pub fn wait(&self) -> nix::Result<nix::sys::wait::WaitStatus> {
+        nix::sys::wait::waitpid(self.pid, None)
     }
 }

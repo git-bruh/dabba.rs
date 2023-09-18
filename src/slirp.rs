@@ -1,5 +1,6 @@
 use crate::util;
 use nix::poll::{PollFd, PollFlags};
+use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::process::{Child, Command};
@@ -33,8 +34,11 @@ impl SlirpHelper {
         let slirp = Command::new("slirp4netns")
             .args([
                 "--configure",
-                "--exit-fd",
-                exit_pipe.0.as_raw_fd().to_string().as_str(),
+                // This has to be investigated, for some reason slirp expects
+                // to receive a POLLHUP event which doesn't get triggered on
+                // closing the write end of the FD, so we use signals for now
+                // "--exit-fd",
+                // exit_pipe.0.as_raw_fd().to_string().as_str(),
                 "--ready-fd",
                 ready_pipe.1.as_raw_fd().to_string().as_str(),
                 "--userns-path",
@@ -81,10 +85,22 @@ impl SlirpHelper {
         Ok(())
     }
 
-    /// Write to the exit pipe, notifying `slirp4netns` to exit
+    /// ~~Write to the exit pipe, notifying `slirp4netns` to exit~~
     fn notify_exit(&self) -> Result<(), std::io::Error> {
         let write_fd = &self.exit_pipe.1;
         nix::unistd::write(write_fd.as_raw_fd(), &[b'1'])?;
+
+        // TODO remove this once we figure out why writing to the pipe
+        // doesn't wake up slirp
+        nix::sys::signal::kill(
+            Pid::from_raw(
+                self.slirp
+                    .id()
+                    .try_into()
+                    .expect("unreachable, PID would overflow"),
+            ),
+            Signal::SIGTERM,
+        )?;
 
         Ok(())
     }
