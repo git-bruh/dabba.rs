@@ -2,9 +2,7 @@ use crate::{mount_helper, mount_helper::MountType, util};
 use nix::sched::{CloneCb, CloneFlags};
 use nix::sys::eventfd::EfdFlags;
 use nix::sys::signal::Signal;
-use nix::unistd::{Pid, Uid};
-use std::fs::File;
-use std::io::Write;
+use nix::unistd::Pid;
 use std::os::fd::AsRawFd;
 use std::path::Path;
 
@@ -28,30 +26,6 @@ impl Sandbox {
     /// Sets the hostname of the container
     pub fn hostname() -> nix::Result<()> {
         nix::unistd::sethostname("container")
-    }
-
-    /// Pretent to be root inside the container by creating the appropriate
-    /// UID and GID mappings
-    pub fn uid_gid_mappings(uid: Uid) -> Result<(), std::io::Error> {
-        let mapping = format!("0 {} 1", uid);
-        log::info!("UID GID mappings: {mapping}");
-
-        let write = |sub_file, contents: &str| -> Result<(), std::io::Error> {
-            let mut file = File::create(format!("/proc/self/{sub_file}"))?;
-            file.write_all(contents.as_bytes())?;
-
-            Ok(())
-        };
-
-        write("uid_map", mapping.as_str())?;
-
-        /* Unprivileged writes to `gid_map` are not possible unless
-         * we disable setgroups() completely */
-        write("setgroups", "deny")?;
-
-        write("gid_map", mapping.as_str())?;
-
-        Ok(())
     }
 
     /// Perform the mounting dance
@@ -86,7 +60,7 @@ impl Sandbox {
         nix::unistd::setsid()
     }
 
-    fn setup(uid: Uid, root: &Path) -> Result<(), std::io::Error> {
+    fn setup(root: &Path) -> Result<(), std::io::Error> {
         log::info!("Spawned sandbox!");
 
         log::info!("Ensuring that child dies with parent");
@@ -94,9 +68,6 @@ impl Sandbox {
 
         log::info!("Setting hostname");
         Self::hostname()?;
-
-        log::info!("Setting up UID GID mappings");
-        Self::uid_gid_mappings(uid)?;
 
         log::info!("Performing the mounting dance");
         Self::mount_and_pivot(root)?;
@@ -125,12 +96,10 @@ impl Sandbox {
 
         log::info!("Spawning sandbox!");
 
-        let uid = Uid::current();
-
         let pid = unsafe {
             nix::sched::clone(
                 Box::new(|| {
-                    if let Err(err) = Self::setup(uid, root) {
+                    if let Err(err) = Self::setup(root) {
                         log::error!("Failed to setup sandbox: {err}");
 
                         nix::unistd::write(efd.as_raw_fd(), &1_u64.to_ne_bytes())
@@ -157,6 +126,8 @@ impl Sandbox {
                 Some(Signal::SIGCHLD as i32),
             )?
         };
+
+        log::info!("Launched sandbox with pid {pid}");
 
         let mut ev64 = [0_u8; 8];
         nix::unistd::read(efd.as_raw_fd(), &mut ev64).expect("failed to read!");

@@ -1,3 +1,4 @@
+pub mod idmap_helper;
 pub mod log;
 pub mod mount_helper;
 pub mod sandbox;

@@ -12,7 +12,7 @@ WIP, will be added after project is fully usable:
 
 - [ ] CGroups
 
-- [ ] Handling `setgroups()` inside the container
+- [x] Handling `setgroups()` inside the container
 
 - [ ] Ability to fetch images from Docker Registry
 
