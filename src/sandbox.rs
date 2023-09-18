@@ -1,4 +1,4 @@
-use crate::{mount_helper, mount_helper::MountType};
+use crate::{mount_helper, mount_helper::MountType, util};
 use nix::sched::{CloneCb, CloneFlags};
 use nix::sys::eventfd::EfdFlags;
 use nix::sys::signal::Signal;
@@ -92,9 +92,6 @@ impl Sandbox {
         log::info!("Ensuring that child dies with parent");
         Self::die_with_parent()?;
 
-        // log::info!("Closing FDs");
-        // util::close_fds()?;
-
         log::info!("Setting hostname");
         Self::hostname()?;
 
@@ -143,6 +140,10 @@ impl Sandbox {
 
                     nix::unistd::write(efd.as_raw_fd(), &2_u64.to_ne_bytes())
                         .expect("failed to write!");
+
+                    log::info!("Closing FDs");
+                    util::close_fds().expect("shouldn't fail to open /proc/self/fd");
+
                     user_cb()
                 }),
                 &mut STACK,

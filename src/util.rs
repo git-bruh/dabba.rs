@@ -1,4 +1,5 @@
-use std::os::fd::{FromRawFd, OwnedFd};
+use nix::{dir::Dir, fcntl::OFlag, sys::stat::Mode};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
 /// Wrap nix::unistd::pipe to reutrn OwnedFd's rather than
 /// RawFd's as RawFd doesn't clean itself up on being dropped
@@ -9,27 +10,36 @@ pub fn pipe_ownedfd() -> nix::Result<(OwnedFd, OwnedFd)> {
 
 /// Close all FDs apart from stdin, stdout and stderr
 pub fn close_fds() -> Result<(), std::io::Error> {
-    for entry in std::fs::read_dir("/proc/self/fd")? {
-        match entry?.file_name().to_str() {
-            Some(entry) => {
-                let entry = entry.parse::<i32>().expect("non-integer FD!");
+    let dir = Dir::open("/proc/self/fd", OFlag::O_DIRECTORY, Mode::empty())?;
+    let dir_fd = dir.as_raw_fd();
 
-                match entry {
+    for entry in dir.into_iter() {
+        match entry?.file_name().to_str() {
+            Ok(entry) => {
+                if entry == "." || entry == ".." {
+                    continue;
+                }
+
+                match entry.parse::<i32>() {
                     // Retain std{in, out, err}
-                    0..=2 => {
-                        log::info!("Not closing FD {entry}");
+                    Ok(0) => log::info!("Not closing stdin"),
+                    Ok(1) => log::info!("Not closing stdout"),
+                    Ok(2) => log::info!("Not closing stderr"),
+                    Ok(fd) => {
+                        if fd == dir_fd {
+                            log::info!("Not closing dir fd {dir_fd}")
+                        } else {
+                            log::info!("Closing FD {fd}");
+                            nix::unistd::close(fd)?;
+                        }
                     }
-                    _ => {
-                        log::info!("Closing FD {entry}");
-                        nix::unistd::close(entry)?;
+                    Err(err) => {
+                        log::warn!("Got invalid FD '{entry}': {err}");
                     }
                 }
             }
-            None => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "invalid fd name!",
-                ));
+            Err(err) => {
+                log::warn!("Got invalid UTF8 in FD, ignoring: {err}");
             }
         }
     }
