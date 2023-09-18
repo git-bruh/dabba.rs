@@ -12,7 +12,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0_isize
     };
 
-    Sandbox::spawn(Path::new("/"), Box::new(cb))?;
+    Sandbox::spawn(
+        Path::new(std::env::args().nth(1).expect("no root passed!").as_str()),
+        Box::new(cb),
+    )?;
 
     Ok(())
 }
