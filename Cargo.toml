@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nix = { version = "0.27.1", features = ["event", "sched", "user", "mount", "fs", "process", "poll"] }
+nix = { version = "0.27.1", features = ["event", "sched", "user", "mount", "fs", "process", "poll", "hostname"] }
 serde = "1.0.188"
 ureq = "2.7.1"
 log = { version = "0.4", features = ["std"] }

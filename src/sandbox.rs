@@ -1,4 +1,4 @@
-use crate::{mount_helper, mount_helper::MountType, util};
+use crate::{mount_helper, mount_helper::MountType};
 use nix::sched::{CloneCb, CloneFlags};
 use nix::sys::eventfd::EfdFlags;
 use nix::sys::signal::Signal;
@@ -23,6 +23,11 @@ impl Sandbox {
     /// container process exits
     pub fn die_with_parent() -> nix::Result<()> {
         nix::sys::prctl::set_pdeathsig(Signal::SIGKILL)
+    }
+
+    /// Sets the hostname of the container
+    pub fn hostname() -> nix::Result<()> {
+        nix::unistd::sethostname("container")
     }
 
     /// Pretent to be root inside the container by creating the appropriate
@@ -91,7 +96,7 @@ impl Sandbox {
         // util::close_fds()?;
 
         log::info!("Setting hostname");
-        log::info!("TODO");
+        Self::hostname()?;
 
         log::info!("Setting up UID GID mappings");
         Self::uid_gid_mappings(uid)?;
