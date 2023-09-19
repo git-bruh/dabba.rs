@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0_isize
     };
 
-    let mut sandbox = Sandbox::spawn(
+    let sandbox = Sandbox::spawn(
         Path::new(std::env::args().nth(1).expect("no root passed!").as_str()),
         Box::new(cb),
     )?;

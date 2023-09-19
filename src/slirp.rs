@@ -3,7 +3,7 @@ use nix::poll::{PollFd, PollFlags};
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::os::fd::{AsRawFd, OwnedFd};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Output, Stdio};
 
 /// Helper for spawning slirp4netns and performing IPC with pipes
 pub struct SlirpHelper {
@@ -31,6 +31,7 @@ impl SlirpHelper {
 
         let (userns_path, netns_path) = Self::get_ns_paths(sandbox_pid);
 
+        // TODO maybe take in arbritary handles for stdout and err
         let slirp = Command::new("slirp4netns")
             .args([
                 "--configure",
@@ -47,6 +48,8 @@ impl SlirpHelper {
                 netns_path.as_str(),
                 "tap0",
             ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
 
         Ok(Self {
@@ -106,10 +109,8 @@ impl SlirpHelper {
     }
 
     /// Notify `slirp4netns` to exit and wait for the process to end
-    pub fn notify_exit_and_wait(&mut self) -> Result<(), std::io::Error> {
+    pub fn notify_exit_and_wait(self) -> Result<Output, std::io::Error> {
         self.notify_exit()?;
-        self.slirp.wait()?;
-
-        Ok(())
+        self.slirp.wait_with_output()
     }
 }

@@ -213,11 +213,17 @@ impl Sandbox {
         }
     }
 
-    pub fn wait(&mut self) -> Result<(), std::io::Error> {
+    pub fn wait(self) -> Result<(), std::io::Error> {
         let status = nix::sys::wait::waitpid(self.pid, None)?;
         log::info!("Sandbox exited with status {status:?}");
 
-        self.slirp.notify_exit_and_wait()?;
+        let output = self.slirp.notify_exit_and_wait()?;
+
+        log::info!(
+            "Slirp Output\nStdOut\n{}\nStdErr\n{}",
+            std::str::from_utf8(&output.stdout).expect("invalid stdout utf8!"),
+            std::str::from_utf8(&output.stderr).expect("invalid stderr utf8!")
+        );
 
         Ok(())
     }
