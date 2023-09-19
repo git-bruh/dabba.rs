@@ -19,8 +19,20 @@ pub struct Sandbox {
 impl Sandbox {
     /// Prevent ourselves from gaining any further privileges, say
     /// through executing setuid programs like `sudo` or `doas`
-    pub fn no_new_privs() -> nix::Result<()> {
-        nix::sys::prctl::set_no_new_privs()
+    pub fn no_new_privs() -> Result<(), std::io::Error> {
+        const CAP_SYS_ADMIN: u32 = 21;
+
+        nix::sys::prctl::set_no_new_privs()?;
+
+        // Prevents usage of umount() in the container, possibly unmasking
+        // a bind mount made by us over an existig directory
+        let ret = unsafe { libc::prctl(libc::PR_CAPBSET_DROP, CAP_SYS_ADMIN, 0, 0, 0) };
+
+        if ret == -1 {
+            return Err(nix::Error::from_i32(nix::errno::errno()).into());
+        }
+
+        Ok(())
     }
 
     /// Ensure that the child process is killed with SIGKILL when the parent
@@ -80,6 +92,9 @@ impl Sandbox {
 
         log::info!("Setting up new session");
         Self::new_session()?;
+
+        log::info!("Dropping privileges");
+        Self::no_new_privs()?;
 
         Ok(())
     }

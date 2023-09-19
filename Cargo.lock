@@ -54,6 +54,7 @@ dependencies = [
 name = "dabba"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "log",
  "nix",
  "num_enum",
