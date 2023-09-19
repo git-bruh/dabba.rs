@@ -12,3 +12,7 @@ ureq = "2.7.1"
 log = { version = "0.4", features = ["std"] }
 num_enum = "0.7.0"
 libc = "0.2.148"
+
+[profile.release]
+opt-level = 3
+lto = true
