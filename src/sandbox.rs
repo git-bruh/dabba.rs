@@ -19,13 +19,14 @@ pub struct Sandbox {
 impl Sandbox {
     /// Prevent ourselves from gaining any further privileges, say
     /// through executing setuid programs like `sudo` or `doas`
-    pub fn no_new_privs() -> Result<(), std::io::Error> {
+    fn drop_privs() -> Result<(), std::io::Error> {
         const CAP_SYS_ADMIN: u32 = 21;
 
         nix::sys::prctl::set_no_new_privs()?;
 
         // Prevents usage of umount() in the container, possibly unmasking
         // a bind mount made by us over an existig directory
+        // XXX nix doesn't provide a safe wrapper for PR_CAPBSET_DROP
         let ret = unsafe { libc::prctl(libc::PR_CAPBSET_DROP, CAP_SYS_ADMIN, 0, 0, 0) };
 
         if ret == -1 {
@@ -37,17 +38,17 @@ impl Sandbox {
 
     /// Ensure that the child process is killed with SIGKILL when the parent
     /// container process exits
-    pub fn die_with_parent() -> nix::Result<()> {
+    fn die_with_parent() -> nix::Result<()> {
         nix::sys::prctl::set_pdeathsig(Signal::SIGKILL)
     }
 
     /// Sets the hostname of the container
-    pub fn hostname() -> nix::Result<()> {
+    fn hostname() -> nix::Result<()> {
         nix::unistd::sethostname("container")
     }
 
     /// Perform the mounting dance
-    pub fn mount_and_pivot(root: &Path) -> Result<(), std::io::Error> {
+    fn mount_and_pivot(root: &Path) -> Result<(), std::io::Error> {
         let target = Path::new("/tmp");
 
         log::info!("Blocking mount propagataion");
@@ -74,7 +75,7 @@ impl Sandbox {
 
     /// Create a new "session", preventing exploits involving
     /// ioctl()'s on the tty outside the sandbox
-    pub fn new_session() -> nix::Result<Pid> {
+    fn new_session() -> nix::Result<Pid> {
         nix::unistd::setsid()
     }
 
@@ -94,7 +95,7 @@ impl Sandbox {
         Self::new_session()?;
 
         log::info!("Dropping privileges");
-        Self::no_new_privs()?;
+        Self::drop_privs()?;
 
         Ok(())
     }
