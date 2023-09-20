@@ -1,4 +1,5 @@
 use crate::{
+    cgroups::{CGroup, CGroupConfig},
     idmap_helper,
     ipc::{ChildEvent, Ipc, ParentEvent},
     mount_helper,
@@ -13,6 +14,8 @@ use std::path::Path;
 
 pub struct Sandbox {
     pub pid: Pid,
+    /// Just store a binding for cleanup
+    _cgroup: CGroup,
     slirp: SlirpHelper,
 }
 
@@ -102,6 +105,10 @@ impl Sandbox {
 
     fn setup_child(ipc: &Ipc, root: &Path) -> isize {
         match ipc.recv_in_child().expect("failed to recv from parent!") {
+            ParentEvent::CGroupFailure => {
+                log::warn!("Parent reported failure in CGroup setup, exiting");
+                return 1;
+            }
             ParentEvent::SlirpFailure => {
                 log::warn!("Parent reported failure in slirp setup, exiting");
                 return 1;
@@ -142,13 +149,24 @@ impl Sandbox {
     /// > into the new namespace.  The first child created by the calling
     /// > process will have the process ID 1 and will assume the role of
     /// > init(1) in the new namespace.
-    pub fn spawn(root: &Path, mut user_cb: CloneCb) -> Result<Self, std::io::Error> {
+    pub fn spawn(
+        base_cgroup: &Path,
+        root: &Path,
+        mut user_cb: CloneCb,
+    ) -> Result<Self, std::io::Error> {
         // Must be static, otherwise a stack use-after-free will occur
         // as the memory is only valid for the duration of the function
         // TODO heap allocate this
         static mut STACK: [u8; 1024 * 1024] = [0_u8; 1024 * 1024];
 
         let ipc = Ipc::new()?;
+
+        let mut cgroup = CGroup::new(
+            base_cgroup,
+            CGroupConfig {
+                mem: String::from("500m"),
+            },
+        )?;
 
         log::info!("Spawning sandbox!");
 
@@ -176,6 +194,15 @@ impl Sandbox {
         };
 
         log::info!("Launched sandbox with pid {pid}");
+
+        if let Err(err) = cgroup.enforce(pid) {
+            log::warn!("Failed to setup cgroups: {err}");
+            ipc.send_from_parent(ParentEvent::CGroupFailure)
+                .expect("failed to send from parent!");
+
+            nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
+            return Err(err);
+        }
 
         if let Err(err) = idmap_helper::setup_maps(pid) {
             log::warn!("Failed to setup UID GID mappings: {err}");
@@ -209,7 +236,11 @@ impl Sandbox {
                     "child init failed",
                 ))
             }
-            ChildEvent::InitSuccess => Ok(Self { pid, slirp }),
+            ChildEvent::InitSuccess => Ok(Self {
+                pid,
+                _cgroup: cgroup,
+                slirp,
+            }),
         }
     }
 

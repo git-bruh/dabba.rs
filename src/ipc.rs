@@ -28,6 +28,8 @@ pub enum ChildEvent {
 pub enum ParentEvent {
     // An error occured when setting up slirp4netns
     SlirpFailure = 1 << 7,
+    // An error occured when setting up cgroups
+    CGroupFailure,
     // An error occured when setting up UID GID mappings
     UidGidMapFailure,
     // All good, child can go ahead with the requested command in the sandbox

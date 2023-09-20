@@ -10,7 +10,7 @@ WIP, will be added after project is fully usable:
 
 - [x] Networking (with `slirp4netns`)
 
-- [ ] CGroups
+- [x] CGroups
 
 - [x] Handling `setgroups()` inside the container
 
