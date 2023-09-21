@@ -15,8 +15,7 @@ use std::path::Path;
 pub struct Sandbox {
     pub pid: Pid,
     /// Just store a binding for cleanup
-    _cgroup: CGroup,
-    slirp: SlirpHelper,
+    _slirp: SlirpHelper,
 }
 
 impl Sandbox {
@@ -161,6 +160,7 @@ impl Sandbox {
 
         let ipc = Ipc::new()?;
 
+        #[cfg(feature = "wip")]
         let mut cgroup = CGroup::new(
             base_cgroup,
             CGroupConfig {
@@ -195,13 +195,16 @@ impl Sandbox {
 
         log::info!("Launched sandbox with pid {pid}");
 
-        if let Err(err) = cgroup.enforce(pid) {
-            log::warn!("Failed to setup cgroups: {err}");
-            ipc.send_from_parent(ParentEvent::CGroupFailure)
-                .expect("failed to send from parent!");
+        #[cfg(feature = "wip")]
+        {
+            if let Err(err) = cgroup.enforce(pid) {
+                log::warn!("Failed to setup cgroups: {err}");
+                ipc.send_from_parent(ParentEvent::CGroupFailure)
+                    .expect("failed to send from parent!");
 
-            nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
-            return Err(err);
+                nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
+                return Err(err);
+            }
         }
 
         if let Err(err) = idmap_helper::setup_maps(pid) {
@@ -236,26 +239,22 @@ impl Sandbox {
                     "child init failed",
                 ))
             }
-            ChildEvent::InitSuccess => Ok(Self {
-                pid,
-                _cgroup: cgroup,
-                slirp,
-            }),
+            ChildEvent::InitSuccess => Ok(Self { pid, _slirp: slirp }),
         }
     }
 
-    pub fn wait(self) -> Result<(), std::io::Error> {
+    pub fn wait(&mut self) -> Result<(), std::io::Error> {
         let status = nix::sys::wait::waitpid(self.pid, None)?;
         log::info!("Sandbox exited with status {status:?}");
 
-        let output = self.slirp.notify_exit_and_wait()?;
-
-        log::info!(
-            "Slirp Output\nStdOut\n{}\nStdErr\n{}",
-            std::str::from_utf8(&output.stdout).expect("invalid stdout utf8!"),
-            std::str::from_utf8(&output.stderr).expect("invalid stderr utf8!")
-        );
-
         Ok(())
+    }
+}
+
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        if let Err(err) = self.wait() {
+            log::warn!("Failed to wait for sandbox: {err}");
+        }
     }
 }

@@ -9,8 +9,6 @@ use std::process::{Child, Command, Output, Stdio};
 pub struct SlirpHelper {
     /// Pipe for waiting for slirp4netns readiness
     ready_pipe: (OwnedFd, OwnedFd),
-    /// Pipe to notify slirp4netns to exit
-    exit_pipe: (OwnedFd, OwnedFd),
     /// The child process handle
     slirp: Child,
 }
@@ -27,19 +25,12 @@ impl SlirpHelper {
     /// implicitly wait for readiness, must call `wait_until_ready`
     pub fn spawn(sandbox_pid: Pid) -> Result<Self, std::io::Error> {
         let ready_pipe = util::pipe_ownedfd()?;
-        let exit_pipe = util::pipe_ownedfd()?;
-
         let (userns_path, netns_path) = Self::get_ns_paths(sandbox_pid);
 
         // TODO maybe take in arbritary handles for stdout and err
         let slirp = Command::new("slirp4netns")
             .args([
                 "--configure",
-                // This has to be investigated, for some reason slirp expects
-                // to receive a POLLHUP event which doesn't get triggered on
-                // closing the write end of the FD, so we use signals for now
-                // "--exit-fd",
-                // exit_pipe.0.as_raw_fd().to_string().as_str(),
                 "--ready-fd",
                 ready_pipe.1.as_raw_fd().to_string().as_str(),
                 "--userns-path",
@@ -52,11 +43,7 @@ impl SlirpHelper {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        Ok(Self {
-            ready_pipe,
-            exit_pipe,
-            slirp,
-        })
+        Ok(Self { ready_pipe, slirp })
     }
 
     /// Wait for activity on the notification FD to ensure that `slirp4netns`
@@ -88,29 +75,37 @@ impl SlirpHelper {
         Ok(())
     }
 
-    /// ~~Write to the exit pipe, notifying `slirp4netns` to exit~~
-    fn notify_exit(&self) -> Result<(), std::io::Error> {
-        let write_fd = &self.exit_pipe.1;
-        nix::unistd::write(write_fd.as_raw_fd(), &[b'1'])?;
+    /// Signal slirp4netns to exit
+    pub fn notify_exit_and_wait(&mut self) -> Result<(), std::io::Error> {
+        // Send a signal only if the process has not exited yet
+        if self.slirp.try_wait()?.is_none() {
+            nix::sys::signal::kill(
+                Pid::from_raw(
+                    self.slirp
+                        .id()
+                        .try_into()
+                        .expect("unreachable, PID would overflow"),
+                ),
+                Signal::SIGTERM,
+            )?;
+        }
 
-        // TODO remove this once we figure out why writing to the pipe
-        // doesn't wake up slirp
-        nix::sys::signal::kill(
-            Pid::from_raw(
-                self.slirp
-                    .id()
-                    .try_into()
-                    .expect("unreachable, PID would overflow"),
-            ),
-            Signal::SIGTERM,
-        )?;
+        self.slirp.wait()?;
 
         Ok(())
     }
 
     /// Notify `slirp4netns` to exit and wait for the process to end
-    pub fn notify_exit_and_wait(self) -> Result<Output, std::io::Error> {
-        self.notify_exit()?;
-        self.slirp.wait_with_output()
+    pub fn output(&mut self) -> Result<Output, std::io::Error> {
+        self.notify_exit_and_wait()?;
+        util::wait_with_output(&mut self.slirp)
+    }
+}
+
+impl Drop for SlirpHelper {
+    fn drop(&mut self) {
+        if let Err(err) = self.notify_exit_and_wait() {
+            log::warn!("Failed to wait for slirp: {err}");
+        }
     }
 }

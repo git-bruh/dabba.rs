@@ -14,13 +14,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The cgroup path can either be created by systemd or cgcreate, example
     // /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/user.slice
-    let sandbox = Sandbox::spawn(
+    Sandbox::spawn(
         Path::new(std::env::args().nth(2).expect("no cgroup path!").as_str()),
         Path::new(std::env::args().nth(1).expect("no root passed!").as_str()),
         Box::new(cb),
     )?;
-
-    sandbox.wait()?;
 
     Ok(())
 }

@@ -1,5 +1,33 @@
 use nix::{dir::Dir, fcntl::OFlag, sys::stat::Mode};
+use std::io::Read;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::process::{Child, Output};
+
+/// Wait for a process to exit and store it's output without
+/// moving the object
+pub fn wait_with_output(process: &mut Child) -> Result<Output, std::io::Error> {
+    let status = process.wait()?;
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+
+    process
+        .stdout
+        .take()
+        .expect("failed to take stdout")
+        .read_to_end(&mut stdout)?;
+    process
+        .stderr
+        .take()
+        .expect("failed to take stdin")
+        .read_to_end(&mut stderr)?;
+
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
 
 /// Wrap nix::unistd::pipe to reutrn OwnedFd's rather than
 /// RawFd's as RawFd doesn't clean itself up on being dropped
