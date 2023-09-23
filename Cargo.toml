@@ -7,11 +7,12 @@ edition = "2021"
 
 [dependencies]
 nix = { version = "0.27.1", features = ["dir", "event", "sched", "user", "mount", "fs", "process", "poll", "signal", "hostname"] }
-serde = "1.0.188"
-ureq = "2.7.1"
 log = { version = "0.4", features = ["std"] }
+ureq = { version = "2.7.1", features = ["json"] }
+serde = { version = "1.0.188", features = ["derive"] }
 num_enum = "0.7.0"
 libc = "0.2.148"
+serde_json = "1.0.107"
 
 [profile.release]
 opt-level = 3
