@@ -74,3 +74,14 @@ pub fn close_fds() -> Result<(), std::io::Error> {
 
     Ok(())
 }
+
+/// Parse the JSON object or return an std::io::Error instance
+pub fn serde_deserialize_or_err<T: serde::de::DeserializeOwned>(json: &str) -> std::io::Result<T> {
+    match serde_json::from_str(json) {
+        Ok(parsed) => Ok(parsed),
+        Err(err) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to read JSON: {err}"),
+        )),
+    }
+}
