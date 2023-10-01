@@ -5,9 +5,9 @@ use serde::Deserialize;
 /// application/vnd.docker.image.rootfs.diff.tar.gzip
 #[derive(Debug, Deserialize)]
 pub struct ManifestConfig {
-    mediaType: String,
-    size: i32,
-    digest: String,
+    pub mediaType: String,
+    pub size: i32,
+    pub digest: String,
 }
 
 /// https://docs.docker.com/registry/spec/manifest-v2-2
@@ -17,7 +17,9 @@ pub struct Manifest {
     schemaVersion: i32,
     mediaType: String,
     config: ManifestConfig,
-    layers: Vec<ManifestConfig>,
+    /// The first layer is the base image, and subsequent layers must be
+    /// mounted on top of it
+    pub layers: Vec<ManifestConfig>,
 }
 
 /// Inner struct for list
@@ -48,6 +50,66 @@ pub struct ManifestListV2 {
 pub struct ImageIndexV1 {
     mediaType: String,
     manifests: Vec<ImageIndex>,
+}
+
+/*
+  "config": {
+    "Hostname": "",
+    "Domainname": "",
+    "User": "",
+    "AttachStdin": false,
+    "AttachStdout": false,
+    "AttachStderr": false,
+    "ExposedPorts": {
+      "80/tcp": {}
+    },
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "NGINX_VERSION=1.25.2",
+      "NJS_VERSION=0.8.0",
+      "PKG_RELEASE=1~bookworm"
+    ],
+    "Cmd": [
+      "nginx",
+      "-g",
+      "daemon off;"
+    ],
+    "Image": "sha256:3b2f458929e18623de347479de73236067715ac36681cf720ad29da0382df8fb",
+    "Volumes": null,
+    "WorkingDir": "",
+    "Entrypoint": [
+      "/docker-entrypoint.sh"
+    ],
+    "OnBuild": null,
+    "Labels": {
+      "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+    },
+    "StopSignal": "SIGQUIT"
+  }
+*/
+#[derive(Debug, Deserialize)]
+pub struct ImageConfigRuntime {
+    /// 8080/tcp, 8080/udp, 8080
+    pub ExposedPorts: Option<serde_json::Value>,
+    pub Env: Vec<String>,
+    pub WorkingDir: String,
+    /// Arguments to pass to the binary, treated as Entrypoint if it's absent
+    pub Cmd: Vec<String>,
+    /// Binary to execute
+    pub Entrypoint: Option<Vec<String>>,
+    pub StopSignal: Option<String>,
+}
+
+/// application/vnd.oci.image.config.v1+json
+#[derive(Debug, Deserialize)]
+pub struct ImageConfig {
+    pub architecture: String,
+    pub os: String,
+    pub config: ImageConfigRuntime,
+    // We don't care about the rest of the fields for now
 }
 
 pub struct RegistryClient {
@@ -111,8 +173,6 @@ impl RegistryClient {
                 )
                 .call()?;
 
-        assert!(blob.has("Content-Length"));
-
         if let Some(len) = blob.header("Content-Length") {
             let mut bytes: Vec<u8> = Vec::with_capacity(len.parse().expect("failed to parse int"));
             blob.into_reader().read_to_end(&mut bytes)?;
@@ -165,8 +225,6 @@ impl RegistryClient {
         let manifest = self.get_manifest_inner(false, None)?;
         let parsed: serde_json::Value = util::serde_deserialize_or_err(&manifest)?;
 
-        println!("{parsed:#?}");
-
         if let serde_json::Value::String(token) = &parsed["mediaType"] {
             log::info!("Got JSON: {parsed:#?}");
 
@@ -213,5 +271,12 @@ impl RegistryClient {
         }
 
         panic!("Invalid manifest!");
+    }
+
+    /// Parses and return's the image config for running the container
+    pub fn get_image_config(&self, manifest: &Manifest) -> Result<ImageConfig, ureq::Error> {
+        let config = self.get_blob(&manifest.config.digest)?;
+        println!("{}", std::str::from_utf8(&config).unwrap());
+        Ok(util::serde_result_to_ureq(serde_json::from_slice(&config))?)
     }
 }

@@ -85,3 +85,13 @@ pub fn serde_deserialize_or_err<T: serde::de::DeserializeOwned>(json: &str) -> s
         )),
     }
 }
+
+pub fn serde_result_to_ureq<T>(result: serde_json::Result<T>) -> std::io::Result<T> {
+    match result {
+        Ok(result) => Ok(result),
+        Err(err) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse: {err}"),
+        )),
+    }
+}
