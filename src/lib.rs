@@ -6,4 +6,5 @@ pub mod mount_helper;
 pub mod registry;
 pub mod sandbox;
 pub mod slirp;
+pub mod storage;
 pub mod util;
