@@ -4,7 +4,7 @@ use crate::{
     mount_helper,
     mount_helper::MountType,
     registry::ImageConfigRuntime,
-    slirp::SlirpHelper,
+    slirp::{PortMapping, SlirpHelper},
     util,
 };
 use nix::sched::CloneFlags;
@@ -200,7 +200,11 @@ impl Sandbox {
     /// > into the new namespace.  The first child created by the calling
     /// > process will have the process ID 1 and will assume the role of
     /// > init(1) in the new namespace.
-    pub fn spawn(layers: &[PathBuf], config: &ImageConfigRuntime) -> Result<Self, std::io::Error> {
+    pub fn spawn(
+        layers: &[PathBuf],
+        config: &ImageConfigRuntime,
+        ports: &[PortMapping],
+    ) -> Result<Self, std::io::Error> {
         // Must be static, otherwise a stack use-after-free will occur
         // as the memory is only valid for the duration of the function
         // TODO heap allocate this
@@ -264,7 +268,7 @@ impl Sandbox {
             return Err(err);
         }
 
-        let slirp = match SlirpHelper::spawn(pid) {
+        let slirp = match SlirpHelper::spawn(pid, Path::new("/tmp/dabba-slirp.sock")) {
             Ok(slirp) => slirp,
             Err(err) => {
                 log::warn!("Failed to setup Slirp: {err}");
@@ -275,6 +279,19 @@ impl Sandbox {
                 return Err(err);
             }
         };
+
+        slirp.wait_until_ready().expect("failed to wait for slirp!");
+
+        for port in ports {
+            if let Err(err) = slirp.expose_port(port) {
+                log::warn!("Failed to expose port: {err}");
+                ipc.send_from_parent(ParentEvent::SlirpFailure)
+                    .expect("failed to send from parent!");
+
+                nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
+                return Err(err);
+            }
+        }
 
         ipc.send_from_parent(ParentEvent::InitSuccess)
             .expect("failed to send from parent!");

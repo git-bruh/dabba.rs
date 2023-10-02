@@ -8,11 +8,11 @@ WIP
 
 - [x] User Namespaces
 
-- [ ] Networking (with `slirp4netns`)
+- [x] Networking (with `slirp4netns`)
 
   - [x] Outgoing Connections
 
-  - [ ] Port Forwarding to expose container
+  - [x] Port Forwarding to expose container
 
 - [ ] CGroups (needs integration for delegation mechanisms)
 
