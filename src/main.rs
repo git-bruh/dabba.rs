@@ -6,13 +6,19 @@ use std::process::Command;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Logger::register(LevelFilter::Info)?;
 
-    let registry = RegistryClient::new("alpine", "latest");
+    let mut args = std::env::args().skip(1);
+
+    let image = args.next().expect("no image passed!");
+    let tag = args.next().expect("no tag passed!");
+
+    log::info!("Using image: '{image}', tag: '{tag}'");
+    let registry = RegistryClient::new(&image, &tag);
 
     let manifest = registry.get_manifest()?;
-    println!("{manifest:#?}");
+    log::info!("Image Manifest: {manifest:#?}");
 
     let config = registry.get_image_config(&manifest)?;
-    println!("{config:#?}");
+    log::info!("Image Config: {config:#?}");
 
     let storage = Storage::new(Path::new("/tmp/storage"))?;
     let layers = storage.download_layers(&registry, &manifest)?;
@@ -23,8 +29,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0_isize
     };
 
-    // The cgroup path can either be created by systemd or cgcreate, example
-    // /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/user.slice
     Sandbox::spawn(&layers, Box::new(cb))?;
 
     Ok(())

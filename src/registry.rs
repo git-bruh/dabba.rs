@@ -276,7 +276,6 @@ impl RegistryClient {
     /// Parses and return's the image config for running the container
     pub fn get_image_config(&self, manifest: &Manifest) -> Result<ImageConfig, ureq::Error> {
         let config = self.get_blob(&manifest.config.digest)?;
-        println!("{}", std::str::from_utf8(&config).unwrap());
         Ok(util::serde_result_to_ureq(serde_json::from_slice(&config))?)
     }
 }
