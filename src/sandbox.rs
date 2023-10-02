@@ -4,6 +4,7 @@ use crate::{
     ipc::{ChildEvent, Ipc, ParentEvent},
     mount_helper,
     mount_helper::MountType,
+    registry::ImageConfigRuntime,
     slirp::SlirpHelper,
     util,
 };
@@ -145,6 +146,54 @@ impl Sandbox {
         0
     }
 
+    fn exec_with_config(config: &ImageConfigRuntime) -> isize {
+        // Clear all environment variables
+        util::clear_env();
+
+        // Set some default vars
+        util::set_env(&[
+            "HOME=/root".to_string(),
+            "TERM=xterm".to_string(),
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+        ]);
+
+        // Set the variables specified in the image config
+        util::set_env(&config.Env);
+
+        if !config.WorkingDir.is_empty() {
+            std::env::set_current_dir(&config.WorkingDir).expect("failed to set cwd!");
+        }
+
+        let mut cmd = config.Cmd.iter();
+
+        // Binary to execute
+        // It is the value of `Entrypoint` (if provided), else it is the
+        // first element of `Cmd`
+        let argv0 = if let Some(entrypoint) = &config.Entrypoint {
+            assert_eq!(entrypoint.len(), 1, "entrypoint has multiple elements!");
+
+            // We already checked that it has one element
+            entrypoint.first().expect("unreachable")
+        } else {
+            // Skip over the iterator so we can collect rest of the elements
+            // as arguments
+            cmd.next().expect("empty cmd!")
+        };
+
+        let args: Vec<_> = cmd.collect();
+
+        log::info!("Launching program '{argv0}' with args: {args:?}");
+
+        let status = std::process::Command::new(argv0)
+            .args(args)
+            .status()
+            .expect("failed to get status of launched command!");
+
+        log::info!("Process exited with status: {status:?}");
+
+        0
+    }
+
     /// Set up the namespace
     /// Just use clone() rather than fork() + unshare()
     /// as propagation of PID namespaces requires another fork()
@@ -152,7 +201,7 @@ impl Sandbox {
     /// > into the new namespace.  The first child created by the calling
     /// > process will have the process ID 1 and will assume the role of
     /// > init(1) in the new namespace.
-    pub fn spawn(layers: &[PathBuf], mut user_cb: CloneCb) -> Result<Self, std::io::Error> {
+    pub fn spawn(layers: &[PathBuf], config: &ImageConfigRuntime) -> Result<Self, std::io::Error> {
         // Must be static, otherwise a stack use-after-free will occur
         // as the memory is only valid for the duration of the function
         // TODO heap allocate this
@@ -179,7 +228,7 @@ impl Sandbox {
                         return status;
                     }
 
-                    user_cb()
+                    Self::exec_with_config(config)
                 }),
                 &mut STACK,
                 CloneFlags::CLONE_NEWNS

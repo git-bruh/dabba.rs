@@ -23,13 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = Storage::new(Path::new("/tmp/storage"))?;
     let layers = storage.download_layers(&registry, &manifest)?;
 
-    let cb = || {
-        Command::new("sh").status().unwrap();
-
-        0_isize
-    };
-
-    Sandbox::spawn(&layers, Box::new(cb))?;
+    Sandbox::spawn(&layers, &config.config)?;
 
     Ok(())
 }

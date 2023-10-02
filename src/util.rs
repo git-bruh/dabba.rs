@@ -75,6 +75,42 @@ pub fn close_fds() -> Result<(), std::io::Error> {
     Ok(())
 }
 
+/// Clear all the existing env vars
+pub fn clear_env() {
+    // We must collect the vars first to avoid modifying the stsructure
+    // during iteration
+    std::env::vars()
+        .collect::<Vec<_>>()
+        .iter()
+        .for_each(|key_value| {
+            let key = &key_value.0;
+
+            log::info!("Clearing variable: {key}");
+            std::env::remove_var(key);
+        });
+}
+
+/// Sets the environment variables, reading a slice of strings in the
+/// 'KEY=VAL' format
+/// XXX is there a more idiomatic way such that we can take slices over
+/// both String and &str?
+pub fn set_env(env: &[String]) {
+    for var in env {
+        let mut split = var.split('=');
+
+        if let Some(key) = split.next() {
+            if let Some(val) = split.next() {
+                log::info!("Setting variable '{key}' to '{val}'");
+                std::env::set_var(&key, &val);
+
+                continue;
+            }
+        }
+
+        panic!("Didn't find valid key value pair in '{var}'!");
+    }
+}
+
 /// Parse the JSON object or return an std::io::Error instance
 pub fn serde_deserialize_or_err<T: serde::de::DeserializeOwned>(json: &str) -> std::io::Result<T> {
     match serde_json::from_str(json) {
