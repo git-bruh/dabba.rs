@@ -31,6 +31,57 @@ pub fn bind_container(container: &Path, target: &Path) -> nix::Result<()> {
     )
 }
 
+/// Subdirectories inside `merged` are passed as the `upper` and `workdir`
+/// arguments to OverlayFS, and the merged filesystem is mounted on `merged`
+/// shadowing the intermediate directories
+pub fn mount_image(layers: &[PathBuf], merged: &Path) -> Result<(), std::io::Error> {
+    let merged = merged.to_path_buf();
+
+    // The workdir is used internally to store tmp/intermediate files for
+    // providing various guarantees such as atomicity
+    let workdir = merged.join("work");
+    std::fs::create_dir_all(&workdir)?;
+
+    // This is where new files actually get written to
+    let upperdir = merged.join("upper");
+    std::fs::create_dir_all(&upperdir)?;
+
+    // The first layer forms the base image and subsequent layers are mounted
+    // on top of it, but the order of mounts goes from right-to-left in OverlayFS
+    // mount options, so we construct the list in reverse
+    // https://docs.kernel.org/filesystems/overlayfs.html#multiple-lower-layers
+    // XXX We could use `fold` with a `String` but we don't mind a useless Vec
+    // allocation here by collect()
+    let lowerdir = layers
+        .iter()
+        .rev()
+        .map(|lower| lower.to_str().expect("invalid utf8!"))
+        .collect::<Vec<&str>>()
+        .join(":")
+        // Escape the digest as ':' is the delimiter for directories
+        .replace("sha256:", "sha256\\:");
+
+    let mount_args = format!(
+        "lowerdir={},upperdir={},workdir={}",
+        lowerdir,
+        upperdir.to_str().expect("invalid utf8!"),
+        workdir.to_str().expect("invalid utf8!")
+    );
+
+    log::info!("OverlayFS args: {mount_args}");
+
+    nix::mount::mount(
+        Some("overlay"),
+        // Upper directory
+        &merged,
+        Some("overlay"),
+        MsFlags::empty(),
+        Some(mount_args.as_str()),
+    )?;
+
+    Ok(())
+}
+
 /// Bind `from_path` to `to_path`
 /// Must mount recursively as we could otherwise access a masked directory
 /// inside a container

@@ -10,7 +10,7 @@ use crate::{
 use nix::sched::{CloneCb, CloneFlags};
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct Sandbox {
     pub pid: Pid,
@@ -50,14 +50,18 @@ impl Sandbox {
     }
 
     /// Perform the mounting dance
-    fn mount_and_pivot(root: &Path) -> Result<(), std::io::Error> {
+    fn mount_and_pivot(layers: &[PathBuf]) -> Result<(), std::io::Error> {
         let target = Path::new("/tmp");
 
         log::info!("Blocking mount propagataion");
         mount_helper::block_mount_propagation()?;
 
-        log::info!("Mounting the container at {target:?}");
-        mount_helper::bind_container(root, target)?;
+        // We don't want to create intermediate files in the host's /tmp
+        // log::info!("Mounting tmpfs at {target:?} inside mount namespace");
+        // mount_helper::perform_pseudo_fs_mount(MountType::Tmp, &target)?;
+
+        log::info!("Mounting the layers at {target:?}");
+        mount_helper::mount_image(layers, &target)?;
 
         // `chdir` into the target so we can use relative paths for
         // mounting rather than constructing new sub-paths each time
@@ -81,7 +85,7 @@ impl Sandbox {
         nix::unistd::setsid()
     }
 
-    fn setup_child_inner(root: &Path) -> Result<(), std::io::Error> {
+    fn setup_child_inner(layers: &[PathBuf]) -> Result<(), std::io::Error> {
         log::info!("Spawned sandbox!");
 
         log::info!("Ensuring that child dies with parent");
@@ -91,7 +95,7 @@ impl Sandbox {
         Self::hostname()?;
 
         log::info!("Performing the mounting dance");
-        Self::mount_and_pivot(root)?;
+        Self::mount_and_pivot(layers)?;
 
         log::info!("Setting up new session");
         Self::new_session()?;
@@ -102,7 +106,7 @@ impl Sandbox {
         Ok(())
     }
 
-    fn setup_child(ipc: &Ipc, root: &Path) -> isize {
+    fn setup_child(ipc: &Ipc, layers: &[PathBuf]) -> isize {
         match ipc.recv_in_child().expect("failed to recv from parent!") {
             ParentEvent::CGroupFailure => {
                 log::warn!("Parent reported failure in CGroup setup, exiting");
@@ -121,7 +125,7 @@ impl Sandbox {
             }
         }
 
-        if let Err(err) = Self::setup_child_inner(root) {
+        if let Err(err) = Self::setup_child_inner(layers) {
             log::error!("Failed to setup sandbox: {err}");
 
             ipc.send_from_child(ChildEvent::InitFailed)
@@ -148,11 +152,7 @@ impl Sandbox {
     /// > into the new namespace.  The first child created by the calling
     /// > process will have the process ID 1 and will assume the role of
     /// > init(1) in the new namespace.
-    pub fn spawn(
-        base_cgroup: &Path,
-        root: &Path,
-        mut user_cb: CloneCb,
-    ) -> Result<Self, std::io::Error> {
+    pub fn spawn(layers: &[PathBuf], mut user_cb: CloneCb) -> Result<Self, std::io::Error> {
         // Must be static, otherwise a stack use-after-free will occur
         // as the memory is only valid for the duration of the function
         // TODO heap allocate this
@@ -173,7 +173,7 @@ impl Sandbox {
         let pid = unsafe {
             nix::sched::clone(
                 Box::new(|| {
-                    let status = Self::setup_child(&ipc, root);
+                    let status = Self::setup_child(&ipc, layers);
 
                     if status != 0 {
                         return status;

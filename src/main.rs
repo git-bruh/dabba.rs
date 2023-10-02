@@ -15,9 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{config:#?}");
 
     let storage = Storage::new(Path::new("/tmp/storage"))?;
-    storage.download_layers(&registry, &manifest)?;
-
-    panic!("");
+    let layers = storage.download_layers(&registry, &manifest)?;
 
     let cb = || {
         Command::new("sh").status().unwrap();
@@ -27,11 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The cgroup path can either be created by systemd or cgcreate, example
     // /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/user.slice
-    Sandbox::spawn(
-        Path::new(""),
-        Path::new(std::env::args().nth(1).expect("no root passed!").as_str()),
-        Box::new(cb),
-    )?;
+    Sandbox::spawn(&layers, Box::new(cb))?;
 
     Ok(())
 }
