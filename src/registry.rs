@@ -5,7 +5,8 @@ use serde::Deserialize;
 /// application/vnd.docker.image.rootfs.diff.tar.gzip
 #[derive(Debug, Deserialize)]
 pub struct ManifestConfig {
-    pub mediaType: String,
+    #[serde(rename(deserialize = "mediaType"))]
+    pub media_type: String,
     pub size: i32,
     pub digest: String,
 }
@@ -14,8 +15,10 @@ pub struct ManifestConfig {
 /// application/vnd.docker.distribution.manifest.v2+json
 #[derive(Debug, Deserialize)]
 pub struct Manifest {
-    schemaVersion: i32,
-    mediaType: String,
+    #[serde(rename(deserialize = "schemaVersion"))]
+    pub schema_version: i32,
+    #[serde(rename(deserialize = "mediaType"))]
+    pub media_type: String,
     config: ManifestConfig,
     /// The first layer is the base image, and subsequent layers must be
     /// mounted on top of it
@@ -25,31 +28,34 @@ pub struct Manifest {
 /// Inner struct for list
 #[derive(Debug, Deserialize)]
 pub struct ImagePlatform {
-    architecture: String,
-    os: String,
+    pub architecture: String,
+    pub os: String,
 }
 
 /// Inner struct for list
 #[derive(Debug, Deserialize)]
 pub struct ImageIndex {
-    mediaType: String,
-    size: i32,
-    digest: String,
-    platform: ImagePlatform,
+    #[serde(rename(deserialize = "mediaType"))]
+    pub media_type: String,
+    pub size: i32,
+    pub digest: String,
+    pub platform: ImagePlatform,
 }
 
 /// application/vnd.docker.distribution.manifest.list.v2+json
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct ManifestListV2 {
-    mediaType: String,
-    manifests: Vec<ImageIndex>,
+    #[serde(rename(deserialize = "mediaType"))]
+    pub media_type: String,
+    pub manifests: Vec<ImageIndex>,
 }
 
 /// application/vnd.oci.image.index.v1+json
 #[derive(Debug, Deserialize)]
 pub struct ImageIndexV1 {
-    mediaType: String,
-    manifests: Vec<ImageIndex>,
+    #[serde(rename(deserialize = "mediaType"))]
+    pub media_type: String,
+    pub manifests: Vec<ImageIndex>,
 }
 
 /*
@@ -91,16 +97,17 @@ pub struct ImageIndexV1 {
   }
 */
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct ImageConfigRuntime {
     /// 8080/tcp, 8080/udp, 8080
-    pub ExposedPorts: Option<serde_json::Value>,
-    pub Env: Vec<String>,
-    pub WorkingDir: String,
+    pub exposed_ports: Option<serde_json::Value>,
+    pub env: Vec<String>,
+    pub working_dir: String,
     /// Arguments to pass to the binary, treated as Entrypoint if it's absent
-    pub Cmd: Vec<String>,
+    pub cmd: Vec<String>,
     /// Binary to execute
-    pub Entrypoint: Option<Vec<String>>,
-    pub StopSignal: Option<String>,
+    pub entrypoint: Option<Vec<String>>,
+    pub stop_signal: Option<String>,
 }
 
 /// application/vnd.oci.image.config.v1+json

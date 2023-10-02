@@ -9,7 +9,7 @@ pub struct Storage {
 
 impl Storage {
     pub fn new(cache_dir: &Path) -> Result<Self, std::io::Error> {
-        std::fs::create_dir_all(&cache_dir)?;
+        std::fs::create_dir_all(cache_dir)?;
 
         Ok(Self {
             cache_dir: cache_dir.to_path_buf(),
@@ -36,7 +36,7 @@ impl Storage {
                 log::info!("Downloading layer {layer}");
 
                 // TODO Verify checksums
-                let layer_bytes = registry.get_blob(&layer)?;
+                let layer_bytes = registry.get_blob(layer)?;
 
                 let mut gzip_reader = GzDecoder::new(&layer_bytes[..]);
                 let mut archive = Archive::new(&mut gzip_reader);
@@ -44,7 +44,7 @@ impl Storage {
                 if let Err(err) = archive.unpack(&path) {
                     log::warn!("Failed to extract layer {layer}: {err}");
 
-                    if let Err(remove_err) = std::fs::remove_dir_all(&path) {
+                    if let Err(_remove_err) = std::fs::remove_dir_all(&path) {
                         log::warn!("Failed to cleanup directory: {path:?}");
                     }
 

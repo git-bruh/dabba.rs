@@ -1,7 +1,6 @@
 use dabba::{log::Logger, registry::RegistryClient, sandbox::Sandbox, storage::Storage};
 use log::LevelFilter;
 use std::path::Path;
-use std::process::Command;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Logger::register(LevelFilter::Info)?;

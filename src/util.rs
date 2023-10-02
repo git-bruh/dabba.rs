@@ -101,7 +101,7 @@ pub fn set_env(env: &[String]) {
         if let Some(key) = split.next() {
             if let Some(val) = split.next() {
                 log::info!("Setting variable '{key}' to '{val}'");
-                std::env::set_var(&key, &val);
+                std::env::set_var(key, val);
 
                 continue;
             }

@@ -1,5 +1,4 @@
 use crate::{
-    cgroups::{CGroup, CGroupConfig},
     idmap_helper,
     ipc::{ChildEvent, Ipc, ParentEvent},
     mount_helper,
@@ -8,7 +7,7 @@ use crate::{
     slirp::SlirpHelper,
     util,
 };
-use nix::sched::{CloneCb, CloneFlags};
+use nix::sched::CloneFlags;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::path::{Path, PathBuf};
@@ -62,7 +61,7 @@ impl Sandbox {
         // mount_helper::perform_pseudo_fs_mount(MountType::Tmp, &target)?;
 
         log::info!("Mounting the layers at {target:?}");
-        mount_helper::mount_image(layers, &target)?;
+        mount_helper::mount_image(layers, target)?;
 
         // `chdir` into the target so we can use relative paths for
         // mounting rather than constructing new sub-paths each time
@@ -158,18 +157,18 @@ impl Sandbox {
         ]);
 
         // Set the variables specified in the image config
-        util::set_env(&config.Env);
+        util::set_env(&config.env);
 
-        if !config.WorkingDir.is_empty() {
-            std::env::set_current_dir(&config.WorkingDir).expect("failed to set cwd!");
+        if !config.working_dir.is_empty() {
+            std::env::set_current_dir(&config.working_dir).expect("failed to set cwd!");
         }
 
-        let mut cmd = config.Cmd.iter();
+        let mut cmd = config.cmd.iter();
 
         // Binary to execute
         // It is the value of `Entrypoint` (if provided), else it is the
         // first element of `Cmd`
-        let argv0 = if let Some(entrypoint) = &config.Entrypoint {
+        let argv0 = if let Some(entrypoint) = &config.entrypoint {
             assert_eq!(entrypoint.len(), 1, "entrypoint has multiple elements!");
 
             // We already checked that it has one element
