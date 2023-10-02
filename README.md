@@ -4,7 +4,7 @@ Container, uses User Namespaces, CGroups, and [slirp4netns](https://github.com/r
 
 # Implementation Details
 
-WIP, will be added after project is fully usable:
+WIP
 
 - [x] User Namespaces
 
@@ -16,15 +16,15 @@ WIP, will be added after project is fully usable:
 
 - [ ] CGroups (needs integration for delegation mechanisms)
 
-- [ ] Clear Environment Variables
+- [x] Clear Environment Variables
 
 - [x] Handling `setgroups()` inside the container
 
 - [ ] Proper PTY handling (use `tmux` inside the container for now)
 
-- [ ] Ability to fetch images from Docker Registry
+- [x] Ability to fetch images from Docker Registry
 
-- [ ] Image storage, snapshots, ...
+- [x] Image storage
 
 # Usage
 
