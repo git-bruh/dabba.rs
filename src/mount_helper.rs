@@ -147,6 +147,10 @@ pub fn perform_pseudo_fs_mount(mount: MountType, path: &Path) -> Result<(), std:
                 symlink(format!("/proc/self/fd/{fd}"), container_dev_base.join(node))?;
             }
 
+            // Some images rely on /dev/fd rather than /proc/self/fd
+            log::info!("Creating /dev/fd");
+            symlink("/proc/self/fd", container_dev_base.join("fd"))?;
+
             // Dummy directory for shared memory
             log::info!("Creating shm");
             std::fs::create_dir(container_dev_base.join("shm"))?;
