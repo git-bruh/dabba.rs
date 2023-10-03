@@ -111,6 +111,11 @@ pub fn set_env(env: &[String]) {
     }
 }
 
+pub fn get_base_path() -> &'static str {
+    static BASE_DIR: &str = "/tmp/dabba";
+    BASE_DIR
+}
+
 /// Parse the JSON object or return an std::io::Error instance
 pub fn serde_deserialize_or_err<T: serde::de::DeserializeOwned>(json: &str) -> std::io::Result<T> {
     match serde_json::from_str(json) {

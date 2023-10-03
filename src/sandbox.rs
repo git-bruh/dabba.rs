@@ -51,7 +51,16 @@ impl Sandbox {
 
     /// Perform the mounting dance
     fn mount_and_pivot(layers: &[PathBuf]) -> Result<(), std::io::Error> {
-        let target = Path::new("/tmp");
+        let overlay_dir = format!("{}/dabba-overlay", util::get_base_path());
+        let target = Path::new(&overlay_dir);
+
+        log::info!("Using {target:?} inside sandbox as overlay path");
+
+        std::fs::create_dir_all(&target)?;
+
+        // Mount a tmpfs on the directory so that we don't create junk on
+        // the host
+        mount_helper::perform_pseudo_fs_mount(MountType::Tmp, &target)?;
 
         log::info!("Blocking mount propagataion");
         mount_helper::block_mount_propagation()?;
@@ -270,7 +279,10 @@ impl Sandbox {
             return Err(err);
         }
 
-        let slirp = match SlirpHelper::spawn(pid, Path::new("/tmp/dabba-slirp.sock")) {
+        let slirp = match SlirpHelper::spawn(
+            pid,
+            Path::new(&format!("{}/dabba-slirp.sock", util::get_base_path())),
+        ) {
             Ok(slirp) => slirp,
             Err(err) => {
                 log::warn!("Failed to setup Slirp: {err}");

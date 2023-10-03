@@ -1,11 +1,15 @@
 use dabba::{
     log::Logger, registry::RegistryClient, sandbox::Sandbox, slirp::PortMapping, storage::Storage,
+    util,
 };
 use log::LevelFilter;
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Logger::register(LevelFilter::Info)?;
+
+    log::info!("Creating base directory");
+    std::fs::create_dir_all(util::get_base_path())?;
 
     let mut args = std::env::args().skip(1);
 
@@ -38,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = registry.get_image_config(&manifest)?;
     log::info!("Image Config: {config:#?}");
 
-    let storage = Storage::new(Path::new("/tmp/storage"))?;
+    let storage = Storage::new(Path::new(&format!("{}/storage", util::get_base_path())))?;
     let layers = storage.download_layers(&registry, &manifest)?;
 
     Sandbox::spawn(&layers, &config.config, &ports)?;
