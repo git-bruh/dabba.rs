@@ -26,7 +26,7 @@ WIP
 
 - [x] Image storage
 
-- [ ] Handling whiteout files in layers
+- [ ] Handling whiteout files in layers (https://github.com/containers/storage/blob/main/pkg/archive/archive_linux.go#L115)
 
 # Usage
 
