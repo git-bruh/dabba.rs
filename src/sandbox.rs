@@ -56,11 +56,11 @@ impl Sandbox {
 
         log::info!("Using {target:?} inside sandbox as overlay path");
 
-        std::fs::create_dir_all(&target)?;
+        std::fs::create_dir_all(target)?;
 
         // Mount a tmpfs on the directory so that we don't create junk on
         // the host
-        mount_helper::perform_pseudo_fs_mount(MountType::Tmp, &target)?;
+        mount_helper::perform_pseudo_fs_mount(MountType::Tmp, target)?;
 
         log::info!("Blocking mount propagataion");
         mount_helper::block_mount_propagation()?;
@@ -154,7 +154,7 @@ impl Sandbox {
         0
     }
 
-    fn exec_with_config(config: &ImageConfigRuntime) -> isize {
+    fn exec_with_config(config: &ImageConfigRuntime, env: &[String]) -> isize {
         // Clear all environment variables
         util::clear_env();
 
@@ -164,6 +164,9 @@ impl Sandbox {
             "TERM=xterm".to_string(),
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
         ]);
+
+        // Set the user provided variables
+        util::set_env(env);
 
         // Set the variables specified in the image config
         util::set_env(&config.env);
@@ -215,6 +218,7 @@ impl Sandbox {
         layers: &[PathBuf],
         config: &ImageConfigRuntime,
         ports: &[PortMapping],
+        env: &[String],
     ) -> Result<Self, std::io::Error> {
         // Must be static, otherwise a stack use-after-free will occur
         // as the memory is only valid for the duration of the function
@@ -242,7 +246,7 @@ impl Sandbox {
                         return status;
                     }
 
-                    Self::exec_with_config(config)
+                    Self::exec_with_config(config, env)
                 }),
                 &mut STACK,
                 CloneFlags::CLONE_NEWNS

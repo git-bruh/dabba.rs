@@ -17,19 +17,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tag = args.next().expect("no tag passed!");
 
     let mut ports = Vec::<PortMapping>::new();
+    let mut env = Vec::<String>::new();
 
     loop {
         if let Some(arg) = args.next() {
-            if arg != "-p" {
-                panic!("Invalid argument: {arg}");
-            }
-
-            if let Some(mapping) = args.next() {
-                ports.push(PortMapping::from_str(&mapping));
-                continue;
+            match arg.as_str() {
+                "-p" => {
+                    if let Some(mapping) = args.next() {
+                        ports.push(PortMapping::from_str(&mapping));
+                        continue;
+                    }
+                }
+                "-e" => {
+                    if let Some(env_var) = args.next() {
+                        env.push(env_var);
+                        continue;
+                    }
+                }
+                _ => panic!("Invalid arg: {arg}"),
             }
         }
 
+        // The inner matches will continue the loop if valid data exists
         break;
     }
 
@@ -45,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = Storage::new(Path::new(&format!("{}/storage", util::get_base_path())))?;
     let layers = storage.download_layers(&registry, &manifest)?;
 
-    Sandbox::spawn(&layers, &config.config, &ports)?;
+    Sandbox::spawn(&layers, &config.config, &ports, &env)?;
 
     Ok(())
 }
