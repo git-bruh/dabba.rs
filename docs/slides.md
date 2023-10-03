@@ -130,4 +130,16 @@ curl: (6) Could not resolve host: duckduckgo.com
 
 ---
 
+That was a fine toy example, but we would like something more... usable. For starters, let's make ourselves root inside the namespace, which would be needed to say, install packages in a container, bind to a privileged port, etc.
+
+For this, user namespaces allow us to create UID and GID mappings, wherein a proxy UID/GID inside the container can have privileges equal to a UID/GID on the host:
+
+- `/proc/<pid>/uid_map`
+
+- `/proc/<pid>/gid_map`
+
+[code](toy-demo/src)
+
+---
+
 - https://iximiuz.com/en/posts/implementing-container-runtime-shim
