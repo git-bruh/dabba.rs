@@ -159,8 +159,10 @@ impl Sandbox {
         // Set the variables specified in the image config
         util::set_env(&config.env);
 
-        if !config.working_dir.is_empty() {
-            std::env::set_current_dir(&config.working_dir).expect("failed to set cwd!");
+        if let Some(working_dir) = &config.working_dir {
+            if !working_dir.is_empty() {
+                std::env::set_current_dir(working_dir).expect("failed to set cwd!");
+            }
         }
 
         let mut cmd = config.cmd.iter();

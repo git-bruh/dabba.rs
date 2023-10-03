@@ -102,7 +102,7 @@ pub struct ImageConfigRuntime {
     /// 8080/tcp, 8080/udp, 8080
     pub exposed_ports: Option<serde_json::Value>,
     pub env: Vec<String>,
-    pub working_dir: String,
+    pub working_dir: Option<String>,
     /// Arguments to pass to the binary, treated as Entrypoint if it's absent
     pub cmd: Vec<String>,
     /// Binary to execute
@@ -277,7 +277,7 @@ impl RegistryClient {
             }
         }
 
-        panic!("Invalid manifest!");
+        panic!("Invalid manifest: {manifest}");
     }
 
     /// Parses and return's the image config for running the container
