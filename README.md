@@ -26,6 +26,8 @@ WIP
 
 - [x] Image storage
 
+- [ ] Handling whiteout files in layers
+
 # Usage
 
 **NOTE:** The `slirp4netns` binary is a runtime dependency
