@@ -130,6 +130,8 @@ curl: (6) Could not resolve host: duckduckgo.com
 
 ---
 
+# Something more usable
+
 That was a fine toy example, but we would like something more... usable. For starters, let's make ourselves root inside the namespace, which would be needed to say, install packages in a container, bind to a privileged port, etc.
 
 For this, user namespaces allow us to create UID and GID mappings, wherein a proxy UID/GID inside the container can have privileges equal to a UID/GID on the host:
@@ -142,4 +144,32 @@ For this, user namespaces allow us to create UID and GID mappings, wherein a pro
 
 ---
 
+# Networking
+
+We'd like one more thing, how do we access the internet from the container?
+
+- Slirp
+
+---
+
+# Docker Images
+
+- OCI Spec
+
+- Layers
+
+- OverlayFS
+
+---
+
+# Putting it all together
+
+---
+
+# References
+
 - https://iximiuz.com/en/posts/implementing-container-runtime-shim
+
+- https://rootlesscontaine.rs
+
+- https://github.com/containers/bubblewrap
