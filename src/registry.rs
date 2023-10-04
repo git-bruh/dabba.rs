@@ -245,7 +245,7 @@ impl RegistryClient {
                         .manifests
                         .iter()
                         .filter(|manifest_item| {
-                            manifest_item.platform.architecture == "amd64"
+                            util::is_compatible_arch(&manifest_item.platform.architecture)
                                 && manifest_item.platform.os == "linux"
                         })
                         .collect();

@@ -1,4 +1,5 @@
 use nix::{dir::Dir, fcntl::OFlag, sys::stat::Mode};
+use std::env::consts::ARCH;
 use std::io::Read;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::process::{Child, Output};
@@ -109,6 +110,26 @@ pub fn set_env(env: &[String]) {
 
         panic!("Didn't find valid key value pair in '{var}'!");
     }
+}
+
+pub fn is_compatible_arch(image_arch: &str) -> bool {
+    // Normalize the architecture names to match up with
+    // https://doc.rust-lang.org/std/env/consts/constant.ARCH.html
+    let normalized = match image_arch {
+        "386" => "x86",
+        "amd64" => "x86_64",
+        // Doesn't account for v7, v8, etc.
+        "arm" => "arm",
+        "arm64" => "aarch64",
+        "ppc64le" => "powerpc64",
+        "s390x" => "s390x",
+        _ => {
+            log::warn!("No mapping for arch: {image_arch}");
+            return false;
+        }
+    };
+
+    normalized == ARCH
 }
 
 pub fn get_base_path() -> &'static str {
