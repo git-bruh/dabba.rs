@@ -140,15 +140,48 @@ For this, user namespaces allow us to create UID and GID mappings, wherein a pro
 
 - `/proc/<pid>/gid_map`
 
+Root to user mapping: `0 1000 1`
+
+User to user mapping: `1 100000 65536`
+
+| Host UID | Namespace UID |
+|----------|---------------|
+|   1000   |       0       |
+|  100000  |       1       |
+|  100001  |       2       |
+
 [code](toy-demo/src)
 
 ---
 
 # Networking
 
-We'd like one more thing, how do we access the internet from the container?
+We'd like one more thing, how do we access the internet from the container? `slirp4netns`!
 
-- Slirp
+Usage: `slirp4netns -c <PID> tap0`
+
+- Creates a subprocess to enter into the existing namespace
+
+- Creates a TAP device and sets up the namespace's routing table to route all traffic through it
+
+- Subprocess passes the FD handle of the TAP device back to the main process over a `socketpair` and exits
+
+```
+  ┌─────────────────┐
+  │                 │
+  │ ┌─────────────┐ │ fork()     ┌───────────────┐
+  │ │   (Child)   ◄─┼────────────┤  slirp4netns  │
+  │ └──────┬──────┘ │ setns(X)   └───────────────┘
+  │        │        │
+  │        │        │
+  │ ┌──────▼──────┐ │
+  │ │TAP /dev/tap0│ │
+  │ └─────────────┘ │
+  │                 │
+  └─────────────────┘
+  Container Namespace
+(X = /proc/<PID>/ns/net)
+```
 
 ---
 
