@@ -36,8 +36,6 @@ See the `docs/` directory
 
 # Usage
 
-**NOTE:** The `slirp4netns` binary is a runtime dependency
-
 ```sh
 cargo run -- <image_name> <tag>
 ```
