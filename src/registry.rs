@@ -233,8 +233,6 @@ impl RegistryClient {
         let parsed: serde_json::Value = util::serde_deserialize_or_err(&manifest)?;
 
         if let serde_json::Value::String(token) = &parsed["mediaType"] {
-            log::info!("Got JSON: {parsed:#?}");
-
             match token.as_str() {
                 Self::MANIFEST_V2 => {
                     return Ok(util::serde_deserialize_or_err(&manifest)?);
@@ -269,10 +267,10 @@ impl RegistryClient {
                         )?)?);
                     }
 
-                    panic!("No relevant manifests found!");
+                    panic!("No relevant manifests found! {parsed:#?}");
                 }
                 media_type => {
-                    panic!("Got invalid media type {media_type}");
+                    panic!("Got invalid media type {media_type}: {parsed:#?}");
                 }
             }
         }
