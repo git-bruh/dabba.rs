@@ -187,15 +187,77 @@ Usage: `slirp4netns -c <PID> tap0`
 
 # Docker Images
 
-- OCI Spec
+- Collection of "layers"
 
-- Layers
+- Layers speeds up incremental builds
 
-- OverlayFS
+```dockerfile
+# Base image (which itself might contain multiple layers)
+FROM debian:12.1
+# Layer N + 1
+RUN apt update -y
+# Layer N + 2
+RUN apt install -y htop
+```
+
+Now, what _is_ a layer?
+
+```sh
+# Build the image
+$ docker build . -t test:latest
+# Crack open the image
+$ docker save test:latest > image.tar
+```
+
+```json
+[
+  {
+    "Config": "19e77748741e658e71345136c33e63f0460426c6cdfbe8d520244c3301b75e5a.json",
+    "RepoTags": [
+      "test:latest"
+    ],
+    "Layers": [
+      # FROM ...
+      "3ed2e39e6cfe97a8053c0927d6cb63b0ad1f0a4e15d1833861bcf89e71ef26a5/layer.tar",
+      # RUN ...
+      "38260da32abbe4c22c349d72bbdb9b4981846457d440e50148168a20e308ff27/layer.tar",
+      # RUN ...
+      "1f197e68078a6ebb1602708ddd3de2412935d6e44d826132717be0dda0c432cf/layer.tar"
+    ]
+  }
+]
+```
+
+---
+
+# OverlayFS
+
+So, each layer is a tar'd up _`diff`_ of the changes to be applied to the base layer, and this concept maps 1:1 to a union filesystem.
+
+![OverlayFS](overlay_constructs.jpg)
+
+- Each intermediate layer is overlayed on top of the base layer to form the "lower" directory
+
+- An external read-write directory forms the "upper" directory, where file modifications can take place
+
+```sh
+# mount -t overlay overlay -o lowerdir=layer3:layer2:layer1,upperdir=<PREFIX>/upper,workdir=<PREFIX>/work <PREFIX>/merged
+```
 
 ---
 
 # Putting it all together
+
+---
+
+# A note on cgroups
+
+cgroups are mainly useful for controlling how much of a resource a process can use, and are hence not essential for containerization, but are a nice to have.
+
+Example
+
+```sh
+```
 
 ---
 
