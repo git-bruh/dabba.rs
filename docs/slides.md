@@ -302,6 +302,18 @@ Example
 
 ---
 
+# Misc
+
+- [Sandbox Escape](TIOCSTI.c)
+
+- Sessions & Process Groups (man-pages)
+
+  - `setsid(2)`
+
+  - `capabilities(7)`
+
+---
+
 # References
 
 - https://rootlesscontaine.rs
