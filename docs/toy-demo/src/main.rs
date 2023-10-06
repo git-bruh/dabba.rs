@@ -52,12 +52,12 @@ fn make_root(pid: i32) -> Result<(), std::io::Error> {
 }
 
 fn main() {
-    static mut STACK: [u8; 1024 * 1024] = [0_u8; 1024 * 1024];
+    let mut stack = [0_u8; 1024 * 1024];
 
     let pid = unsafe {
         nix::sched::clone(
             Box::new(in_sandbox),
-            &mut STACK,
+            &mut stack,
             // Mount namespace
             CloneFlags::CLONE_NEWNS
                 // PID namespace
