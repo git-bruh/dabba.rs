@@ -1,23 +1,38 @@
+use nix::mount::MntFlags;
 use nix::mount::MsFlags;
 use nix::sched::CloneFlags;
 use nix::sys::signal::Signal;
 use std::ffi::CString;
 use std::fs::File;
-use std::path::PathBuf;
 use std::io::Write;
+use std::path::PathBuf;
 
 fn in_sandbox() -> isize {
-    let argv: [CString; 1] = [CString::new("sh").unwrap()];
-    let env: [CString; 0] = [];
+    let path = std::env::args().nth(1).expect("no path!");
 
     nix::mount::mount(
+        Some(path.as_str()),
+        path.as_str(),
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_BIND,
+        None::<&str>,
+    )
+    .expect("failed to mount!");
+
+    nix::unistd::chdir(path.as_str()).expect("failed to chdir!");
+    nix::mount::mount(
         Some("proc"),
-        "/proc",
+        "proc",
         Some("proc"),
         MsFlags::empty(),
         None::<&str>,
     )
     .expect("failed to mount /proc!");
+    nix::unistd::pivot_root(".", ".").expect("failed to pivot!");
+    nix::mount::umount2(".", MntFlags::MNT_DETACH).expect("failed to unmount old root!");
+
+    let argv: [CString; 1] = [CString::new("sh").unwrap()];
+    let env: [CString; 0] = [];
 
     nix::unistd::execve(&CString::new("/bin/sh").unwrap(), &argv, &env).expect("failed to exec!");
 
@@ -74,7 +89,7 @@ fn main() {
 
     println!("Spawned sandbox with PID: {pid}");
 
-    make_root(pid.as_raw()).expect("failed to make uid 0!");
+    // make_root(pid.as_raw()).expect("failed to make uid 0!");
 
     nix::sys::wait::waitpid(pid, None).expect("failed to wait!");
 }

@@ -246,17 +246,44 @@ So, each layer is a tar'd up _`diff`_ of the changes to be applied to the base l
 
 ---
 
+# Recap
+
+Now that we have an image cracked open, why not try to use it with our original example code?
+
+- `pivot_root`
+
+- `new{uid,gid}map`
+
+---
+
+# The container registry
+
+Now that we have all the basic concepts in order, we'd like to run some actual images, which we'll fetch from the Docker registry
+
+- [Image Manifest](postgres_manifest.json)
+
+- [Image Config](postgres_config.json)
+
+---
+
 # Putting it all together
+
+...
 
 ---
 
 # A note on cgroups
 
-cgroups are mainly useful for controlling how much of a resource a process can use, and are hence not essential for containerization, but are a nice to have.
+cgroups are mainly useful for controlling how much of a resource a process can use (among other stuff), and are hence not essential for containerization, but are a nice to have.
 
 Example
 
 ```sh
+# cd /sys/fs/cgroup
+# mkdir mygroup
+# echo 1G | tee memory.max
+# echo 0 | tee swap.max
+# echo <PID> | tee cgroup.procs
 ```
 
 ---
