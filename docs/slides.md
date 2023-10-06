@@ -268,7 +268,21 @@ Now that we have all the basic concepts in order, we'd like to run some actual i
 
 # Putting it all together
 
-...
+So now we know what all needs to be done by our container runtime:
+
+- Fetch image layers from the Docker registry & store them
+
+- Setup a sandboxed environment for the container
+
+  - Networking with slirp (including port forwarding)
+
+  - UID/GID Mappings with `new{u,g}idmap`
+
+  - Pseudo filesystem setup
+
+  - OverlayFS setup
+
+  - Handling misc. options from the fetched image config
 
 ---
 
@@ -290,8 +304,10 @@ Example
 
 # References
 
-- https://iximiuz.com/en/posts/implementing-container-runtime-shim
-
 - https://rootlesscontaine.rs
 
 - https://github.com/containers/bubblewrap
+
+- https://jdebp.uk/FGA/TIOCSTI-is-a-kernel-problem.html
+
+- https://iximiuz.com/en/posts/implementing-container-runtime-shim
