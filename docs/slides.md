@@ -310,4 +310,6 @@ Example
 
 - https://jdebp.uk/FGA/TIOCSTI-is-a-kernel-problem.html
 
+- https://iximiuz.com/en/posts/linux-pty-what-powers-docker-attach-functionality
+
 - https://iximiuz.com/en/posts/implementing-container-runtime-shim
