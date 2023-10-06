@@ -4,7 +4,7 @@ Container, uses User Namespaces, CGroups, and [slirp4netns](https://github.com/r
 
 # Implementation
 
-See the `docs/` directory
+See a not-so brief summary [here](docs/slides.md)
 
 - [x] User Namespaces
 
