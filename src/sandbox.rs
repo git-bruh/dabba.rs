@@ -220,10 +220,10 @@ impl Sandbox {
         ports: &[PortMapping],
         env: &[String],
     ) -> Result<Self, std::io::Error> {
-        // Must be static, otherwise a stack use-after-free will occur
-        // as the memory is only valid for the duration of the function
-        // TODO heap allocate this
-        static mut STACK: [u8; 1024 * 1024] = [0_u8; 1024 * 1024];
+        // This doesn't need to be `static` as the cloned process
+        // will get another copy of the stack, the memory is not shared
+        // with the parent..
+        let mut stack = [0_u8; 1024 * 1024];
 
         let ipc = Ipc::new()?;
 
@@ -248,7 +248,7 @@ impl Sandbox {
 
                     Self::exec_with_config(config, env)
                 }),
-                &mut STACK,
+                &mut stack,
                 CloneFlags::CLONE_NEWNS
                     | CloneFlags::CLONE_NEWUSER
                     | CloneFlags::CLONE_NEWPID
